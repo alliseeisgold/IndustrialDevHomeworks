@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: custom-app-service
+spec:
+  selector:
+    app: custom-app
+    component: deployment
+  ports:
+    - port: 8080
+      targetPort: 8080

@@ -69,8 +69,10 @@ func (a *App) handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentConfig := config.Load()
+
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(a.cfg.WelcomeMessage))
+	_, _ = w.Write([]byte(currentConfig.WelcomeMessage))
 }
 
 func (a *App) handleStatus(w http.ResponseWriter, r *http.Request) {
