@@ -3,6 +3,7 @@ kind: Service
 metadata:
   name: custom-app-service
 spec:
+  type: ClusterIP
   selector:
     app: custom-app
     component: deployment
