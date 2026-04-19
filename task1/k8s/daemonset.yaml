@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-agent
+spec:
+  selector:
+    matchLabels:
+      app: log-agent
+  template:
+    metadata:
+      labels:
+        app: log-agent
+    spec:
+      serviceAccountName: log-agent
+      containers:
+        - name: log-agent
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /state
+
+              while true; do
+                pods=$(kubectl get pods \
+                  --field-selector spec.nodeName=${NODE_NAME},status.phase=Running \
+                  -l app=custom-app,component=deployment \
+                  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
+
+                for pod in $pods; do
+                  offset_file="/state/${pod}.offset"
+
+                  current_lines=$(kubectl exec "$pod" -- sh -lc 'if [ -f /app/logs/app.log ]; then wc -l < /app/logs/app.log; else echo 0; fi' 2>/dev/null | tr -d '[:space:]')
+
+                  if [ -z "$current_lines" ]; then
+                    continue
+                  fi
+
+                  if [ -f "$offset_file" ]; then
+                    previous_lines=$(cat "$offset_file")
+                  else
+                    previous_lines=0
+                  fi
+
+                  if [ "$current_lines" -lt "$previous_lines" ]; then
+                    previous_lines=0
+                  fi
+
+                  if [ "$current_lines" -gt "$previous_lines" ]; then
+                    start_line=$((previous_lines + 1))
+
+                    kubectl exec "$pod" -- sh -lc "tail -n +$start_line /app/logs/app.log 2>/dev/null || true" 2>/dev/null | while IFS= read -r line; do
+                      if [ -n "$line" ]; then
+                        echo "[$pod] $line"
+                      fi
+                    done
+
+                    echo "$current_lines" > "$offset_file"
+                  fi
+                done
+
+                sleep 5
+              done
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: state
+              mountPath: /state
+      volumes:
+        - name: state
+          emptyDir: {}
