@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: custom-app-virtualservice
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - custom-app-gateway
+  http:
+    - name: external-access
+      route:
+        - destination:
+            host: custom-app-service.default.svc.cluster.local
+            port:
+              number: 8080

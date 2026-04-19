@@ -33,6 +33,9 @@ spec:
   jobTemplate:
     spec:
       template:
+        metadata:
+          annotations:
+            sidecar.istio.io/inject: "false"
         spec:
           serviceAccountName: log-archive
           restartPolicy: OnFailure
