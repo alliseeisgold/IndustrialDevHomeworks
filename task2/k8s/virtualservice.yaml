@@ -41,6 +41,11 @@ spec:
             exact: POST
           uri:
             exact: /log
+      timeout: 1s
+      retries:
+        attempts: 2
+        perTryTimeout: 300ms
+        retryOn: connect-failure,refused-stream,unavailable,cancelled,5xx,gateway-error
       route:
         - destination:
             host: custom-app-service.default.svc.cluster.local
