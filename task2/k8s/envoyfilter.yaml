@@ -1,0 +1,36 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: custom-app-log-delay
+spec:
+  workloadSelector:
+    labels:
+      app: custom-app
+      component: deployment
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          portNumber: 8080
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+              subFilter:
+                name: envoy.filters.http.router
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.fault
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
+            delay:
+              fixed_delay: 2s
+              percentage:
+                numerator: 100
+                denominator: HUNDRED
+            headers:
+              - name: ":path"
+                exact_match: /log
+              - name: ":method"
+                exact_match: POST

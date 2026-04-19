@@ -1,0 +1,56 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: custom-app-virtualservice
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - custom-app-gateway
+  http:
+    - name: root-route
+      match:
+        - uri:
+            exact: /
+      route:
+        - destination:
+            host: custom-app-service.default.svc.cluster.local
+            port:
+              number: 8080
+    - name: status-route
+      match:
+        - uri:
+            exact: /status
+      route:
+        - destination:
+            host: custom-app-service.default.svc.cluster.local
+            port:
+              number: 8080
+    - name: logs-route
+      match:
+        - uri:
+            exact: /logs
+      route:
+        - destination:
+            host: custom-app-service.default.svc.cluster.local
+            port:
+              number: 8080
+    - name: log-route
+      match:
+        - method:
+            exact: POST
+          uri:
+            exact: /log
+      timeout: 1s
+      retries:
+        attempts: 2
+        perTryTimeout: 300ms
+        retryOn: connect-failure,refused-stream,unavailable,cancelled,5xx,gateway-error
+      route:
+        - destination:
+            host: custom-app-service.default.svc.cluster.local
+            port:
+              number: 8080
+    - name: not-found
+      directResponse:
+        status: 404

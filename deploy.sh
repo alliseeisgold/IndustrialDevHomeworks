@@ -5,9 +5,27 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TASK_DIR="$ROOT_DIR/task1"
 K8S_DIR="$TASK_DIR/k8s"
+TASK2_K8S_DIR="$ROOT_DIR/task2/k8s"
 
 log() {
   printf '[deploy] %s\n' "$1"
+}
+
+enable_istio_for_minikube() {
+  if ! command -v minikube >/dev/null 2>&1; then
+    log "minikube is required to auto-install Istio in this setup"
+    exit 1
+  fi
+
+  log "enabling istio addons in minikube"
+  minikube addons enable istio-provisioner
+  minikube addons enable istio
+
+  log "waiting for istiod"
+  kubectl wait -n istio-system --for=condition=available deployment/istiod --timeout=240s
+
+  log "waiting for istio ingress gateway"
+  kubectl rollout status -n istio-system deployment/istio-ingressgateway --timeout=240s
 }
 
 wait_for_service_endpoints() {
@@ -39,6 +57,15 @@ fi
 
 CURRENT_CONTEXT="$(kubectl config current-context 2>/dev/null || true)"
 
+if [ "$CURRENT_CONTEXT" = "minikube" ]; then
+  enable_istio_for_minikube
+else
+  log "current context is '$CURRENT_CONTEXT'; deploy.sh expects Istio to be available in the cluster"
+fi
+
+log "enabling sidecar injection for default namespace"
+kubectl label namespace default istio-injection=enabled --overwrite
+
 log "building custom-app image"
 if [ "$CURRENT_CONTEXT" = "minikube" ] && command -v minikube >/dev/null 2>&1; then
   minikube image build -t custom-app:latest "$TASK_DIR"
@@ -57,11 +84,18 @@ fi
 
 log "applying configmap and standalone pod"
 kubectl apply -f "$K8S_DIR/configmap.yaml"
+kubectl delete pod custom-app-pod --ignore-not-found=true
 kubectl apply -f "$K8S_DIR/pod.yaml"
 
 log "applying deployment and service"
 kubectl apply -f "$K8S_DIR/deployment.yaml"
 kubectl apply -f "$K8S_DIR/service.yaml"
+kubectl rollout restart deployment/custom-app-deployment
+
+if [ -d "$TASK2_K8S_DIR" ]; then
+  log "applying istio gateway and virtualservice"
+  kubectl apply -f "$TASK2_K8S_DIR"
+fi
 
 log "applying daemonset and cronjob resources"
 kubectl apply -f "$K8S_DIR/log-agent-rbac.yaml"
@@ -93,3 +127,8 @@ kubectl get service custom-app-service
 kubectl get daemonset log-agent
 kubectl get pods -l app=log-agent
 kubectl get cronjob log-archive
+
+if kubectl get gateway custom-app-gateway >/dev/null 2>&1; then
+  kubectl get gateway custom-app-gateway
+  kubectl get virtualservice custom-app-virtualservice
+fi
